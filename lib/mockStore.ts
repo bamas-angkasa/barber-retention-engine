@@ -424,10 +424,14 @@ export function cancelQueue(
   return { item: populateQueueItem(item), stats: computeStats(tenantId) };
 }
 
-export function listBookings(tenantId: string, date?: string): BookingPopulated[] {
-  const targetDate = date ?? todayISO();
+export function listBookings(tenantId: string, date?: string, all?: boolean): BookingPopulated[] {
   return store.bookings
-    .filter((b) => b.tenantId === tenantId && b.startAt.startsWith(targetDate))
+    .filter((b) => {
+      if (b.tenantId !== tenantId) return false;
+      if (all) return true;
+      const targetDate = date ?? todayISO();
+      return b.startAt.startsWith(targetDate);
+    })
     .sort((a, b) => a.startAt.localeCompare(b.startAt))
     .map((b) => populateBooking(b));
 }
@@ -474,4 +478,249 @@ export function toggleBarberActive(tenantId: string, barberId: string): Barber {
   if (!barber) throw new Error('BARBER_NOT_FOUND');
   barber.isActive = !barber.isActive;
   return barber;
+}
+
+// ── Booking CRUD ──────────────────────────────────────────────────────────────
+
+/** Slot step in minutes */
+const SLOT_STEP = 30;
+/** Operating hours */
+const OPEN_HOUR = 9;
+const CLOSE_HOUR = 20;
+
+export interface TimeSlot {
+  time: string;       // "HH:MM"
+  available: boolean;
+  barberId?: string | null;
+}
+
+/**
+ * Return all 30-min slots for a date.
+ * A slot is unavailable if the requested barber (or ANY barber when barberId is null)
+ * has an overlapping booking that is not CANCELLED.
+ */
+export function getAvailableSlots(
+  tenantId: string,
+  date: string,
+  barberId?: string | null,
+  serviceId?: string
+): TimeSlot[] {
+  const service = serviceId
+    ? store.services.find((s) => s.id === serviceId && s.tenantId === tenantId)
+    : null;
+  const durationMin = service?.durationMin ?? SLOT_STEP;
+
+  const dayBookings = store.bookings.filter(
+    (b) =>
+      b.tenantId === tenantId &&
+      b.startAt.startsWith(date) &&
+      b.status !== 'CANCELLED'
+  );
+
+  const slots: TimeSlot[] = [];
+  for (let h = OPEN_HOUR; h < CLOSE_HOUR; h++) {
+    for (let m = 0; m < 60; m += SLOT_STEP) {
+      const slotStart = h * 60 + m;
+      const slotEnd = slotStart + durationMin;
+      if (slotEnd > CLOSE_HOUR * 60) break;
+
+      const hh = String(h).padStart(2, '0');
+      const mm = String(m).padStart(2, '0');
+      const time = `${hh}:${mm}`;
+
+      // Check overlap: slot[start,end) overlaps booking[bStart,bEnd)
+      const conflicts = dayBookings.filter((b) => {
+        // Match barber: if barberId specified check that barber, else check all
+        if (barberId && b.barberId && b.barberId !== barberId) return false;
+
+        const bDate = date;
+        const bStartStr = b.startAt.startsWith(bDate) ? b.startAt.slice(11, 16) : null;
+        const bEndStr = b.endAt.startsWith(bDate) ? b.endAt.slice(11, 16) : null;
+        if (!bStartStr || !bEndStr) return false;
+
+        const [bSh, bSm] = bStartStr.split(':').map(Number);
+        const [bEh, bEm] = bEndStr.split(':').map(Number);
+        const bStart = bSh * 60 + bSm;
+        const bEnd = bEh * 60 + bEm;
+
+        return slotStart < bEnd && slotEnd > bStart;
+      });
+
+      slots.push({ time, available: conflicts.length === 0 });
+    }
+  }
+  return slots;
+}
+
+export interface CreateBookingInput {
+  customer: { name: string; phone: string };
+  serviceId: string;
+  barberId?: string | null;
+  date: string;
+  startTime: string; // "HH:MM"
+}
+
+export function createBooking(
+  tenantId: string,
+  input: CreateBookingInput
+): BookingPopulated {
+  // Find or create customer
+  let customer = store.customers.find(
+    (c) => c.tenantId === tenantId && c.phone === input.customer.phone
+  );
+  if (!customer) {
+    customer = {
+      id: `cust_${uid()}`,
+      tenantId,
+      name: input.customer.name,
+      phone: input.customer.phone,
+      lastVisitAt: null,
+      visitCount: 0,
+    };
+    store.customers.push(customer);
+  }
+
+  const service = store.services.find((s) => s.id === input.serviceId && s.tenantId === tenantId);
+  if (!service) throw new Error('SERVICE_NOT_FOUND');
+
+  const barberId = input.barberId ?? null;
+  if (barberId) {
+    const barber = store.barbers.find((b) => b.id === barberId && b.tenantId === tenantId);
+    if (!barber) throw new Error('BARBER_NOT_FOUND');
+  }
+
+  // Build ISO datetimes
+  const [sh, sm] = input.startTime.split(':').map(Number);
+  const startAt = new Date(`${input.date}T${input.startTime}:00`);
+  const endAt = new Date(startAt.getTime() + service.durationMin * 60 * 1000);
+
+  // Check slot still available
+  const conflicting = store.bookings.find((b) => {
+    if (b.tenantId !== tenantId) return false;
+    if (b.status === 'CANCELLED') return false;
+    if (barberId && b.barberId && b.barberId !== barberId) return false;
+    if (!b.startAt.startsWith(input.date)) return false;
+    const bStart = new Date(b.startAt).getTime();
+    const bEnd = new Date(b.endAt).getTime();
+    return startAt.getTime() < bEnd && endAt.getTime() > bStart;
+  });
+  if (conflicting) throw new Error('SLOT_TAKEN');
+
+  void sh; void sm; // suppress unused warning
+
+  const newBooking: Booking = {
+    id: `book_${uid()}`,
+    tenantId,
+    customerId: customer.id,
+    barberId,
+    serviceId: input.serviceId,
+    startAt: startAt.toISOString(),
+    endAt: endAt.toISOString(),
+    status: 'UPCOMING',
+    priceIdr: service.priceIdr,
+  };
+  store.bookings.push(newBooking);
+
+  return populateBooking(newBooking);
+}
+
+export function confirmBooking(
+  tenantId: string,
+  bookingId: string
+): { booking: BookingPopulated; waLink: string } {
+  const booking = store.bookings.find(
+    (b) => b.id === bookingId && b.tenantId === tenantId
+  );
+  if (!booking) throw new Error('BOOKING_NOT_FOUND');
+  if (booking.status === 'CANCELLED') throw new Error('INVALID_STATUS_TRANSITION');
+  if (booking.status === 'DONE') throw new Error('INVALID_STATUS_TRANSITION');
+
+  booking.status = 'UPCOMING'; // re-confirm if needed (already upcoming = confirmed)
+
+  const populated = populateBooking(booking);
+  const tenant = store.tenants.find((t) => t.id === tenantId)!;
+
+  // Format date & time for WA message
+  const startDate = new Date(booking.startAt);
+  const dateStr = startDate.toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+  const timeStr = startDate.toLocaleTimeString('id-ID', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+
+  const msg = [
+    `Halo *${populated.customer.name}*! 👋`,
+    ``,
+    `Booking kamu di *${tenant.name}* sudah *DIKONFIRMASI* ✅`,
+    ``,
+    `📋 Detail Booking:`,
+    `• Layanan  : ${populated.service.name}`,
+    `• Barber   : ${populated.barber?.name ?? 'Barber mana saja'}`,
+    `• Tanggal  : ${dateStr}`,
+    `• Jam      : ${timeStr} WIB`,
+    `• Harga    : Rp ${populated.service.priceIdr.toLocaleString('id-ID')}`,
+    ``,
+    `Mohon hadir *10 menit sebelum* jadwal ya. Sampai jumpa! 💈`,
+    ``,
+    `_${tenant.name}_`,
+    tenant.address ? `_${tenant.address}_` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  // Normalize phone: remove leading 0, add 62
+  const rawPhone = populated.customer.phone.replace(/\D/g, '');
+  const waPhone = rawPhone.startsWith('0')
+    ? '62' + rawPhone.slice(1)
+    : rawPhone.startsWith('62')
+    ? rawPhone
+    : '62' + rawPhone;
+
+  const waLink = `https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`;
+
+  return { booking: populated, waLink };
+}
+
+export function cancelBookingById(
+  tenantId: string,
+  bookingId: string
+): BookingPopulated {
+  const booking = store.bookings.find(
+    (b) => b.id === bookingId && b.tenantId === tenantId
+  );
+  if (!booking) throw new Error('BOOKING_NOT_FOUND');
+  if (booking.status === 'DONE' || booking.status === 'CANCELLED')
+    throw new Error('INVALID_STATUS_TRANSITION');
+
+  booking.status = 'CANCELLED';
+  return populateBooking(booking);
+}
+
+export function completeBookingById(
+  tenantId: string,
+  bookingId: string
+): BookingPopulated {
+  const booking = store.bookings.find(
+    (b) => b.id === bookingId && b.tenantId === tenantId
+  );
+  if (!booking) throw new Error('BOOKING_NOT_FOUND');
+  if (booking.status === 'CANCELLED') throw new Error('INVALID_STATUS_TRANSITION');
+  if (booking.status === 'DONE') throw new Error('INVALID_STATUS_TRANSITION');
+
+  booking.status = 'DONE';
+
+  // Update customer stats
+  const customer = store.customers.find((c) => c.id === booking.customerId);
+  if (customer) {
+    customer.lastVisitAt = new Date().toISOString();
+    customer.visitCount += 1;
+  }
+
+  return populateBooking(booking);
 }

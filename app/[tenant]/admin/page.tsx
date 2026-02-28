@@ -12,11 +12,13 @@ import {
   CheckCircle,
   XCircle,
   CalendarDays,
-  BarChart3,
   ToggleLeft,
   ToggleRight,
   ArrowLeft,
   Clock,
+  MessageCircle,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -294,44 +296,192 @@ function QueueLiveTab({
 
 // ── Bookings Tab ──────────────────────────────────────────────────────────────
 
-function BookingsTab({ bookings }: { bookings: BookingPopulated[] }) {
+function BookingsTab({
+  bookings,
+  tenantSlug,
+  onRefresh,
+}: {
+  bookings: BookingPopulated[];
+  tenantSlug: string;
+  onRefresh: () => void;
+}) {
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
+
+  async function bookingAction(
+    bookingId: string,
+    endpoint: string
+  ): Promise<{ waLink?: string } | null> {
+    setLoadingId(bookingId);
+    try {
+      const res = await fetch(
+        `/api/tenants/${tenantSlug}/bookings/${bookingId}/${endpoint}`,
+        { method: 'POST' }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error?.message ?? 'Aksi gagal');
+        return null;
+      }
+      onRefresh();
+      return data;
+    } catch {
+      toast.error('Terjadi kesalahan');
+      return null;
+    } finally {
+      setLoadingId(null);
+    }
+  }
+
+  async function handleConfirm(bookingId: string) {
+    const result = await bookingAction(bookingId, 'confirm');
+    if (result?.waLink) {
+      window.open(result.waLink, '_blank', 'noopener');
+      toast.success('Booking dikonfirmasi! WhatsApp dibuka untuk kirim notifikasi.');
+    } else if (result) {
+      toast.success('Booking dikonfirmasi');
+    }
+  }
+
+  async function handleComplete(bookingId: string) {
+    const result = await bookingAction(bookingId, 'complete');
+    if (result) toast.success('Booking selesai');
+  }
+
+  async function handleCancel(bookingId: string) {
+    const result = await bookingAction(bookingId, 'cancel');
+    if (result) toast.success('Booking dibatalkan');
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const upcoming = bookings.filter(
+    (b) => b.status !== 'CANCELLED' && b.status !== 'DONE'
+  );
+  const past = bookings.filter((b) => b.status === 'DONE' || b.status === 'CANCELLED');
+  const displayed = showAll ? bookings : bookings.filter((b) => b.startAt.startsWith(today) || b.status === 'UPCOMING');
+
   if (bookings.length === 0) {
     return (
       <Card className="border-2 p-8 text-center text-muted-foreground">
         <CalendarDays className="h-8 w-8 mx-auto mb-2 opacity-40" />
-        <p className="font-bold text-sm">Tidak ada booking hari ini</p>
+        <p className="font-bold text-sm">Tidak ada booking</p>
       </Card>
     );
   }
 
   return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="font-black uppercase text-xs tracking-wider">Waktu</TableHead>
-            <TableHead className="font-black uppercase text-xs tracking-wider">Nama</TableHead>
-            <TableHead className="font-black uppercase text-xs tracking-wider">Layanan</TableHead>
-            <TableHead className="font-black uppercase text-xs tracking-wider">Barber</TableHead>
-            <TableHead className="font-black uppercase text-xs tracking-wider">Harga</TableHead>
-            <TableHead className="font-black uppercase text-xs tracking-wider">Status</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {bookings.map((b) => (
-            <TableRow key={b.id}>
-              <TableCell className="font-bold text-sm whitespace-nowrap">
-                {formatTime(b.startAt)} – {formatTime(b.endAt)}
-              </TableCell>
-              <TableCell className="font-medium">{b.customer.name}</TableCell>
-              <TableCell className="text-muted-foreground text-sm">{b.service.name}</TableCell>
-              <TableCell className="text-muted-foreground text-sm">{b.barber?.name ?? '—'}</TableCell>
-              <TableCell className="font-bold text-sm">{formatRupiah(b.priceIdr)}</TableCell>
-              <TableCell><StatusBadge status={b.status} /></TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+    <div className="space-y-4">
+      {/* Filter toggle */}
+      <div className="flex items-center justify-between">
+        <div className="flex gap-3 text-sm font-bold text-muted-foreground">
+          <span>{upcoming.length} upcoming</span>
+          <span>·</span>
+          <span>{past.length} selesai/batal</span>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="border-2 font-bold uppercase text-xs tracking-wide"
+          onClick={() => setShowAll((v) => !v)}
+        >
+          {showAll ? (
+            <><ChevronUp className="h-3 w-3 mr-1" />Hari ini saja</>
+          ) : (
+            <><ChevronDown className="h-3 w-3 mr-1" />Semua booking</>
+          )}
+        </Button>
+      </div>
+
+      {/* Booking cards */}
+      <div className="space-y-3">
+        {displayed.length === 0 && (
+          <Card className="border-2 p-6 text-center text-muted-foreground">
+            <p className="font-bold text-sm">Tidak ada booking untuk ditampilkan</p>
+          </Card>
+        )}
+        {displayed.map((b) => {
+          const startDate = new Date(b.startAt);
+          const dateStr = startDate.toLocaleDateString('id-ID', {
+            weekday: 'short', day: 'numeric', month: 'short',
+          });
+          const timeStr = startDate.toLocaleTimeString('id-ID', {
+            hour: '2-digit', minute: '2-digit', hour12: false,
+          });
+          const isActive = b.status !== 'DONE' && b.status !== 'CANCELLED';
+          const isLoading = loadingId === b.id;
+
+          return (
+            <Card key={b.id} className={`border-2 p-4 ${!isActive ? 'opacity-60' : ''}`}>
+              <div className="flex items-start gap-3">
+                {/* Time block */}
+                <div className="shrink-0 text-center border-2 border-border rounded-lg p-2 min-w-[60px]">
+                  <div className="text-xs font-bold text-muted-foreground uppercase">{dateStr}</div>
+                  <div className="text-lg font-black leading-none mt-0.5">{timeStr}</div>
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-black">{b.customer.name}</span>
+                    <StatusBadge status={b.status} />
+                  </div>
+                  <div className="text-sm text-muted-foreground mt-0.5">
+                    {b.service.name} · {formatRupiah(b.priceIdr)}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    Barber: {b.barber?.name ?? 'Mana saja'}
+                  </div>
+                  <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                    <MessageCircle className="h-3 w-3" />
+                    <span>{b.customer.phone}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              {isActive && (
+                <div className="flex gap-2 mt-3 pt-3 border-t border-border">
+                  <Button
+                    size="sm"
+                    className="flex-1 font-bold uppercase tracking-wide text-xs"
+                    disabled={isLoading}
+                    onClick={() => handleConfirm(b.id)}
+                  >
+                    {isLoading ? (
+                      <RefreshCw className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <>
+                        <MessageCircle className="h-3 w-3 mr-1" />
+                        Konfirmasi + WA
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="font-bold uppercase tracking-wide text-xs border-2"
+                    disabled={isLoading}
+                    onClick={() => handleComplete(b.id)}
+                  >
+                    <CheckCircle className="h-3 w-3 mr-1" />
+                    Selesai
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="font-bold uppercase tracking-wide text-xs border-2"
+                    disabled={isLoading}
+                    onClick={() => handleCancel(b.id)}
+                  >
+                    <XCircle className="h-3 w-3 mr-1" />
+                    Batal
+                  </Button>
+                </div>
+              )}
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -479,7 +629,7 @@ export default function AdminPage({ params }: { params: Promise<{ tenant: string
       const [tenantRes, queueRes, bookingsRes, dashRes, customersRes] = await Promise.all([
         fetch(`/api/tenants/${slug}`),
         fetch(`/api/tenants/${slug}/queue`),
-        fetch(`/api/tenants/${slug}/bookings`),
+        fetch(`/api/tenants/${slug}/bookings?all=1`),
         fetch(`/api/tenants/${slug}/dashboard/today`),
         fetch(`/api/tenants/${slug}/customers`),
       ]);
@@ -627,7 +777,7 @@ export default function AdminPage({ params }: { params: Promise<{ tenant: string
           </TabsContent>
 
           <TabsContent value="bookings" className="mt-4">
-            <BookingsTab bookings={bookings} />
+            <BookingsTab bookings={bookings} tenantSlug={slug} onRefresh={fetchAll} />
           </TabsContent>
 
           <TabsContent value="barbers" className="mt-4">

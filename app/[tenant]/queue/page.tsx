@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, use } from 'react';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import { Scissors, Users, Clock, Zap, ChevronRight, RefreshCw, CheckCircle, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -468,10 +469,12 @@ export default function QueuePage({ params }: { params: Promise<{ tenant: string
                 variant="outline"
                 className="w-full h-12 font-bold uppercase tracking-wide border-2"
                 size="lg"
-                onClick={() => toast.info('Fitur booking segera hadir!')}
+                asChild
               >
-                <Clock className="h-4 w-4 mr-2" />
-                Booking Jadwal
+                <Link href={`/${slug}/booking`}>
+                  <Clock className="h-4 w-4 mr-2" />
+                  Booking Jadwal
+                </Link>
               </Button>
             </div>
 
