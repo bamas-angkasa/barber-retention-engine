@@ -5,6 +5,8 @@ export interface Tenant {
   logoUrl?: string;
   address?: string;
   phone?: string;
+  openHour?: string;  // "HH:MM" e.g. "09:00"
+  closeHour?: string; // "HH:MM" e.g. "20:00"
 }
 
 export interface Barber {
@@ -93,5 +95,19 @@ export interface BarberStats {
   barberId: string;
   barberName: string;
   servedCount: number;
+  revenueIdr: number;
+}
+
+export interface DailyRevenue {
+  date: string;       // "YYYY-MM-DD"
+  label: string;      // "Mon", "Tue", etc.
+  revenueIdr: number;
+  customerCount: number;
+}
+
+export interface ServiceStats {
+  serviceId: string;
+  serviceName: string;
+  count: number;
   revenueIdr: number;
 }

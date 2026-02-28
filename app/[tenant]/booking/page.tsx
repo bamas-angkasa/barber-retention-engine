@@ -20,6 +20,8 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { LangToggle } from '@/components/lang-toggle';
+import { useLang } from '@/components/lang-provider';
 import { formatRupiah } from '@/lib/utils';
 import type { Barber, Service, Tenant, BookingPopulated } from '@/lib/types';
 
@@ -51,19 +53,16 @@ function maxDateStr(): string {
   return d.toISOString().slice(0, 10);
 }
 
-function formatDateLabel(iso: string): string {
+function formatDateLabel(iso: string, lang = 'id'): string {
   if (!iso) return '';
   const d = new Date(iso + 'T00:00:00');
-  return d.toLocaleDateString('id-ID', {
+  return d.toLocaleDateString(lang === 'en' ? 'en-US' : 'id-ID', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
     year: 'numeric',
   });
 }
-
-// Steps: 1=Service, 2=Barber, 3=DateTime, 4=DataDiri, 5=Konfirmasi
-const STEPS = ['Layanan', 'Barber', 'Jadwal', 'Data Diri', 'Konfirmasi'];
 
 // ── Step Indicator ─────────────────────────────────────────────────────────────
 
@@ -90,6 +89,15 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
 
 export default function BookingPage({ params }: { params: Promise<{ tenant: string }> }) {
   const { tenant: slug } = use(params);
+  const { t, lang } = useLang();
+
+  const STEPS = [
+    t('bookingStep1'),
+    t('bookingStep2'),
+    t('bookingStep3'),
+    t('bookingStep4'),
+    t('bookingStep5'),
+  ];
 
   // Tenant data
   const [tenant, setTenant] = useState<Tenant | null>(null);
@@ -125,12 +133,13 @@ export default function BookingPage({ params }: { params: Promise<{ tenant: stri
         setBarbers(data.barbers.filter((b: Barber) => b.isActive));
         setServices(data.services);
       } catch {
-        toast.error('Barbershop tidak ditemukan');
+        toast.error(t('queueNotFound'));
       } finally {
         setLoadingTenant(false);
       }
     }
     load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
   // Load slots when date/barber/service changes (step 2+)
@@ -147,10 +156,11 @@ export default function BookingPage({ params }: { params: Promise<{ tenant: stri
       const data = await res.json();
       setSlots(data.slots);
     } catch {
-      toast.error('Gagal memuat slot waktu');
+      toast.error(t('error'));
     } finally {
       setLoadingSlots(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, form.date, form.barberId, form.serviceId, step]);
 
   useEffect(() => {
@@ -173,13 +183,13 @@ export default function BookingPage({ params }: { params: Promise<{ tenant: stri
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.error?.message ?? 'Booking gagal');
+        toast.error(data.error?.message ?? t('bookingError'));
         return;
       }
       setBooking(data.booking);
-      toast.success('Booking berhasil! Tunggu konfirmasi dari barbershop.');
+      toast.success(t('bookingSuccess'));
     } catch {
-      toast.error('Terjadi kesalahan, coba lagi');
+      toast.error(t('error'));
     } finally {
       setSubmitting(false);
     }
@@ -200,6 +210,11 @@ export default function BookingPage({ params }: { params: Promise<{ tenant: stri
   // ── Booking success view ───────────────────────────────────────────────────
   if (booking) {
     const startDate = new Date(booking.startAt);
+    const timeStr = startDate.toLocaleTimeString(lang === 'en' ? 'en-US' : 'id-ID', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
     return (
       <div className="min-h-screen bg-background">
         <header className="sticky top-0 z-50 bg-background border-b-2 border-border">
@@ -208,30 +223,28 @@ export default function BookingPage({ params }: { params: Promise<{ tenant: stri
               <Scissors className="h-5 w-5 text-primary" strokeWidth={2.5} />
               <span className="font-black text-sm uppercase tracking-tight">{tenant?.name}</span>
             </div>
-            <ThemeToggle />
+            <div className="flex items-center gap-2">
+              <LangToggle />
+              <ThemeToggle />
+            </div>
           </div>
         </header>
         <main className="max-w-lg mx-auto px-4 py-8 space-y-6">
           <div className="text-center space-y-2">
             <CheckCircle className="h-14 w-14 mx-auto text-primary" strokeWidth={2} />
-            <h1 className="text-2xl font-black uppercase tracking-tight">Booking Dikirim!</h1>
-            <p className="text-muted-foreground text-sm">
-              Tunggu konfirmasi dari barbershop via WhatsApp.
-            </p>
+            <h1 className="text-2xl font-black uppercase tracking-tight">{t('bookingSuccess')}</h1>
+            <p className="text-muted-foreground text-sm">{t('bookingSuccessSub')}</p>
           </div>
 
           <Card className="border-2 divide-y divide-border">
             {[
-              { label: 'Nama', value: booking.customer.name },
-              { label: 'No. HP', value: booking.customer.phone },
-              { label: 'Layanan', value: booking.service.name },
-              { label: 'Barber', value: booking.barber?.name ?? 'Barber mana saja' },
-              { label: 'Tanggal', value: formatDateLabel(booking.startAt.slice(0, 10)) },
-              {
-                label: 'Jam',
-                value: `${startDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false })} WIB`,
-              },
-              { label: 'Harga', value: formatRupiah(booking.priceIdr) },
+              { label: t('name'), value: booking.customer.name },
+              { label: t('phone'), value: booking.customer.phone },
+              { label: t('service'), value: booking.service.name },
+              { label: t('barber'), value: booking.barber?.name ?? t('bookingBarberAny') },
+              { label: t('date'), value: formatDateLabel(booking.startAt.slice(0, 10), lang) },
+              { label: t('time'), value: `${timeStr} WIB` },
+              { label: t('price'), value: formatRupiah(booking.priceIdr) },
             ].map(({ label, value }) => (
               <div key={label} className="p-4 flex items-center justify-between gap-2">
                 <span className="text-xs font-black uppercase tracking-wider text-muted-foreground w-24 shrink-0">
@@ -244,10 +257,7 @@ export default function BookingPage({ params }: { params: Promise<{ tenant: stri
 
           <div className="p-4 rounded-lg border-2 border-primary/30 bg-primary/5 flex gap-3">
             <MessageCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-            <p className="text-sm text-foreground">
-              Barbershop akan menghubungi kamu via WhatsApp untuk konfirmasi booking ini.
-              Pastikan nomor HP kamu aktif.
-            </p>
+            <p className="text-sm text-foreground">{t('bookingWAInfo')}</p>
           </div>
 
           <div className="space-y-3">
@@ -259,12 +269,12 @@ export default function BookingPage({ params }: { params: Promise<{ tenant: stri
                 setForm({ serviceId: '', barberId: '', date: todayStr(), startTime: '', name: '', phone: '' });
               }}
             >
-              Buat Booking Lain
+              {t('bookingAnother')}
             </Button>
             <Button asChild variant="outline" className="w-full font-bold uppercase tracking-wide border-2">
               <Link href={`/${slug}/queue`}>
                 <Scissors className="h-4 w-4 mr-2" />
-                Ambil Antrian Langsung
+                {t('bookingQueueNow')}
               </Link>
             </Button>
           </div>
@@ -286,7 +296,7 @@ export default function BookingPage({ params }: { params: Promise<{ tenant: stri
                 className="flex items-center gap-1 text-sm font-bold hover:opacity-70 transition-opacity"
               >
                 <ChevronLeft className="h-4 w-4" />
-                Kembali
+                {t('back')}
               </button>
             ) : (
               <Link
@@ -294,7 +304,7 @@ export default function BookingPage({ params }: { params: Promise<{ tenant: stri
                 className="flex items-center gap-1 text-sm font-bold hover:opacity-70 transition-opacity"
               >
                 <ArrowLeft className="h-4 w-4" />
-                Kembali
+                {t('back')}
               </Link>
             )}
           </div>
@@ -302,6 +312,7 @@ export default function BookingPage({ params }: { params: Promise<{ tenant: stri
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
               {STEPS[step]}
             </span>
+            <LangToggle />
             <ThemeToggle />
           </div>
         </div>
@@ -312,12 +323,12 @@ export default function BookingPage({ params }: { params: Promise<{ tenant: stri
       </header>
 
       <main className="max-w-lg mx-auto px-4 py-6 pb-24">
-        {/* ── Step 0: Pilih Layanan ─────────────────────────────────────── */}
+        {/* ── Step 0: Pick Service ──────────────────────────────────────── */}
         {step === 0 && (
           <div className="space-y-4">
             <div>
-              <h1 className="text-2xl font-black uppercase tracking-tight">Pilih Layanan</h1>
-              <p className="text-muted-foreground text-sm mt-1">Layanan apa yang kamu inginkan?</p>
+              <h1 className="text-2xl font-black uppercase tracking-tight">{t('bookingPickService')}</h1>
+              <p className="text-muted-foreground text-sm mt-1">{t('bookingPickServiceSub')}</p>
             </div>
             <div className="space-y-2">
               {services.map((svc) => (
@@ -333,7 +344,7 @@ export default function BookingPage({ params }: { params: Promise<{ tenant: stri
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="font-black">{svc.name}</div>
-                      <div className="text-sm text-muted-foreground">{svc.durationMin} menit</div>
+                      <div className="text-sm text-muted-foreground">{svc.durationMin} {t('minutes')}</div>
                     </div>
                     <div className="text-right">
                       <div className="font-black text-primary">{formatRupiah(svc.priceIdr)}</div>
@@ -348,12 +359,12 @@ export default function BookingPage({ params }: { params: Promise<{ tenant: stri
           </div>
         )}
 
-        {/* ── Step 1: Pilih Barber ──────────────────────────────────────── */}
+        {/* ── Step 1: Pick Barber ───────────────────────────────────────── */}
         {step === 1 && (
           <div className="space-y-4">
             <div>
-              <h1 className="text-2xl font-black uppercase tracking-tight">Pilih Barber</h1>
-              <p className="text-muted-foreground text-sm mt-1">Atau pilih barber mana saja.</p>
+              <h1 className="text-2xl font-black uppercase tracking-tight">{t('bookingPickBarber')}</h1>
+              <p className="text-muted-foreground text-sm mt-1">{t('bookingPickBarberSub')}</p>
             </div>
             <div className="space-y-2">
               {/* Any barber option */}
@@ -370,8 +381,8 @@ export default function BookingPage({ params }: { params: Promise<{ tenant: stri
                     <User className="h-5 w-5 text-muted-foreground" />
                   </div>
                   <div className="flex-1">
-                    <div className="font-black">Barber Mana Saja</div>
-                    <div className="text-sm text-muted-foreground">Dilayani barber yang tersedia</div>
+                    <div className="font-black">{t('bookingBarberAny')}</div>
+                    <div className="text-sm text-muted-foreground">{t('bookingBarberAnySub')}</div>
                   </div>
                   {form.barberId === '' && <CheckCircle className="h-4 w-4 text-primary" />}
                 </div>
@@ -394,7 +405,7 @@ export default function BookingPage({ params }: { params: Promise<{ tenant: stri
                       <div className="font-black">{b.name}</div>
                       <div className="flex items-center gap-1">
                         <span className="h-2 w-2 rounded-full bg-green-500 inline-block" />
-                        <span className="text-sm text-muted-foreground">Aktif</span>
+                        <span className="text-sm text-muted-foreground">{t('active')}</span>
                       </div>
                     </div>
                     {form.barberId === b.id && <CheckCircle className="h-4 w-4 text-primary" />}
@@ -405,19 +416,19 @@ export default function BookingPage({ params }: { params: Promise<{ tenant: stri
           </div>
         )}
 
-        {/* ── Step 2: Pilih Tanggal & Waktu ────────────────────────────── */}
+        {/* ── Step 2: Pick Date & Time ──────────────────────────────────── */}
         {step === 2 && (
           <div className="space-y-5">
             <div>
-              <h1 className="text-2xl font-black uppercase tracking-tight">Pilih Jadwal</h1>
-              <p className="text-muted-foreground text-sm mt-1">Tentukan tanggal dan jam kedatangan.</p>
+              <h1 className="text-2xl font-black uppercase tracking-tight">{t('bookingPickSchedule')}</h1>
+              <p className="text-muted-foreground text-sm mt-1">{t('bookingPickScheduleSub')}</p>
             </div>
 
             {/* Date picker */}
             <div className="space-y-2">
               <Label className="font-black uppercase text-xs tracking-wider flex items-center gap-2">
                 <CalendarDays className="h-3.5 w-3.5" />
-                Tanggal
+                {t('bookingPickDate')}
               </Label>
               <input
                 type="date"
@@ -428,7 +439,7 @@ export default function BookingPage({ params }: { params: Promise<{ tenant: stri
                 className="w-full h-11 px-3 rounded-lg border-2 border-border bg-background text-foreground font-medium text-sm focus:outline-none focus:border-primary"
               />
               {form.date && (
-                <p className="text-xs text-muted-foreground capitalize">{formatDateLabel(form.date)}</p>
+                <p className="text-xs text-muted-foreground capitalize">{formatDateLabel(form.date, lang)}</p>
               )}
             </div>
 
@@ -436,13 +447,13 @@ export default function BookingPage({ params }: { params: Promise<{ tenant: stri
             <div className="space-y-2">
               <Label className="font-black uppercase text-xs tracking-wider flex items-center gap-2">
                 <Clock className="h-3.5 w-3.5" />
-                Jam
+                {t('bookingPickTime')}
                 {loadingSlots && <RefreshCw className="h-3 w-3 animate-spin ml-1" />}
               </Label>
               {loadingSlots ? (
-                <div className="text-center py-8 text-muted-foreground text-sm">Memuat slot waktu…</div>
+                <div className="text-center py-8 text-muted-foreground text-sm">{t('bookingLoadingSlots')}</div>
               ) : slots.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground text-sm">Pilih tanggal terlebih dahulu</div>
+                <div className="text-center py-8 text-muted-foreground text-sm">{t('bookingNoSlots')}</div>
               ) : (
                 <div className="grid grid-cols-4 gap-2">
                   {slots.map((slot) => (
@@ -467,20 +478,20 @@ export default function BookingPage({ params }: { params: Promise<{ tenant: stri
           </div>
         )}
 
-        {/* ── Step 3: Data Diri ─────────────────────────────────────────── */}
+        {/* ── Step 3: Personal Data ─────────────────────────────────────── */}
         {step === 3 && (
           <div className="space-y-4">
             <div>
-              <h1 className="text-2xl font-black uppercase tracking-tight">Data Diri</h1>
-              <p className="text-muted-foreground text-sm mt-1">Isi nama dan nomor HP kamu.</p>
+              <h1 className="text-2xl font-black uppercase tracking-tight">{t('bookingPersonalData')}</h1>
+              <p className="text-muted-foreground text-sm mt-1">{t('bookingPersonalDataSub')}</p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="name" className="font-black uppercase text-xs tracking-wider">
-                Nama Lengkap
+                {t('bookingFullName')}
               </Label>
               <Input
                 id="name"
-                placeholder="Nama lengkap kamu"
+                placeholder={t('bookingFullNamePlaceholder')}
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 className="border-2 font-medium h-11"
@@ -488,40 +499,38 @@ export default function BookingPage({ params }: { params: Promise<{ tenant: stri
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="phone" className="font-black uppercase text-xs tracking-wider">
-                No. HP / WhatsApp
+                {t('bookingPhoneWA')}
               </Label>
               <Input
                 id="phone"
                 type="tel"
-                placeholder="08xxxxxxxxxx"
+                placeholder={t('joinPhonePlaceholder')}
                 value={form.phone}
                 onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
                 className="border-2 font-medium h-11"
               />
-              <p className="text-xs text-muted-foreground">
-                Konfirmasi booking akan dikirim via WhatsApp ke nomor ini.
-              </p>
+              <p className="text-xs text-muted-foreground">{t('bookingPhoneNote')}</p>
             </div>
           </div>
         )}
 
-        {/* ── Step 4: Review & Konfirmasi ───────────────────────────────── */}
+        {/* ── Step 4: Review & Confirm ──────────────────────────────────── */}
         {step === 4 && (
           <div className="space-y-4">
             <div>
-              <h1 className="text-2xl font-black uppercase tracking-tight">Konfirmasi Booking</h1>
-              <p className="text-muted-foreground text-sm mt-1">Cek kembali detail booking kamu.</p>
+              <h1 className="text-2xl font-black uppercase tracking-tight">{t('bookingConfirmTitle')}</h1>
+              <p className="text-muted-foreground text-sm mt-1">{t('bookingConfirmSub')}</p>
             </div>
             <Card className="border-2 divide-y divide-border">
               {[
-                { label: 'Nama', value: form.name },
-                { label: 'No. HP', value: form.phone },
-                { label: 'Layanan', value: selectedService?.name ?? '—' },
-                { label: 'Harga', value: selectedService ? formatRupiah(selectedService.priceIdr) : '—' },
-                { label: 'Durasi', value: selectedService ? `${selectedService.durationMin} menit` : '—' },
-                { label: 'Barber', value: selectedBarber?.name ?? 'Barber mana saja' },
-                { label: 'Tanggal', value: formatDateLabel(form.date) },
-                { label: 'Jam', value: form.startTime ? `${form.startTime} WIB` : '—' },
+                { label: t('name'), value: form.name },
+                { label: t('phone'), value: form.phone },
+                { label: t('service'), value: selectedService?.name ?? '—' },
+                { label: t('price'), value: selectedService ? formatRupiah(selectedService.priceIdr) : '—' },
+                { label: t('duration'), value: selectedService ? `${selectedService.durationMin} ${t('minutes')}` : '—' },
+                { label: t('barber'), value: selectedBarber?.name ?? t('bookingBarberAny') },
+                { label: t('date'), value: formatDateLabel(form.date, lang) },
+                { label: t('time'), value: form.startTime ? `${form.startTime} WIB` : '—' },
               ].map(({ label, value }) => (
                 <div key={label} className="p-3.5 flex items-center justify-between gap-2">
                   <span className="text-xs font-black uppercase tracking-wider text-muted-foreground w-20 shrink-0">
@@ -534,7 +543,7 @@ export default function BookingPage({ params }: { params: Promise<{ tenant: stri
             <div className="p-4 rounded-lg border-2 border-primary/30 bg-primary/5 flex gap-3">
               <MessageCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
               <p className="text-sm">
-                Setelah kamu submit, barbershop akan konfirmasi via WhatsApp ke{' '}
+                {t('bookingWANote')}{' '}
                 <strong>{form.phone}</strong>.
               </p>
             </div>
@@ -556,7 +565,7 @@ export default function BookingPage({ params }: { params: Promise<{ tenant: stri
               }
               onClick={() => setStep((s) => s + 1)}
             >
-              Lanjut
+              {t('bookingNext')}
               <ChevronRight className="h-5 w-5 ml-1" />
             </Button>
           ) : (
@@ -571,7 +580,7 @@ export default function BookingPage({ params }: { params: Promise<{ tenant: stri
               ) : (
                 <>
                   <CalendarDays className="h-5 w-5 mr-2" />
-                  Kirim Booking
+                  {t('bookingSubmit')}
                 </>
               )}
             </Button>

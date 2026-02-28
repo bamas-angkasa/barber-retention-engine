@@ -10,6 +10,8 @@ import type {
   BookingPopulated,
   DashboardSummary,
   BarberStats,
+  DailyRevenue,
+  ServiceStats,
 } from './types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -723,4 +725,165 @@ export function completeBookingById(
   }
 
   return populateBooking(booking);
+}
+
+// ── Services CRUD ─────────────────────────────────────────────────────────────
+
+export function addService(
+  tenantId: string,
+  input: { name: string; priceIdr: number; durationMin: number }
+): Service {
+  const s: Service = {
+    id: `svc_${uid()}`,
+    tenantId,
+    name: input.name,
+    priceIdr: input.priceIdr,
+    durationMin: input.durationMin,
+  };
+  store.services.push(s);
+  return s;
+}
+
+export function updateService(
+  tenantId: string,
+  serviceId: string,
+  input: Partial<{ name: string; priceIdr: number; durationMin: number }>
+): Service {
+  const s = store.services.find((x) => x.id === serviceId && x.tenantId === tenantId);
+  if (!s) throw new Error('SERVICE_NOT_FOUND');
+  if (input.name !== undefined) s.name = input.name;
+  if (input.priceIdr !== undefined) s.priceIdr = input.priceIdr;
+  if (input.durationMin !== undefined) s.durationMin = input.durationMin;
+  return s;
+}
+
+export function deleteService(tenantId: string, serviceId: string): void {
+  const idx = store.services.findIndex((x) => x.id === serviceId && x.tenantId === tenantId);
+  if (idx === -1) throw new Error('SERVICE_NOT_FOUND');
+  store.services.splice(idx, 1);
+}
+
+// ── Barbers CRUD ──────────────────────────────────────────────────────────────
+
+export function addBarber(tenantId: string, input: { name: string }): Barber {
+  const b: Barber = {
+    id: `barber_${uid()}`,
+    tenantId,
+    name: input.name,
+    isActive: true,
+  };
+  store.barbers.push(b);
+  return b;
+}
+
+export function updateBarber(
+  tenantId: string,
+  barberId: string,
+  input: Partial<{ name: string; isActive: boolean }>
+): Barber {
+  const b = store.barbers.find((x) => x.id === barberId && x.tenantId === tenantId);
+  if (!b) throw new Error('BARBER_NOT_FOUND');
+  if (input.name !== undefined) b.name = input.name;
+  if (input.isActive !== undefined) b.isActive = input.isActive;
+  return b;
+}
+
+export function deleteBarber(tenantId: string, barberId: string): void {
+  const idx = store.barbers.findIndex((x) => x.id === barberId && x.tenantId === tenantId);
+  if (idx === -1) throw new Error('BARBER_NOT_FOUND');
+  store.barbers.splice(idx, 1);
+}
+
+// ── Tenant Settings ───────────────────────────────────────────────────────────
+
+export function updateTenantSettings(
+  tenantId: string,
+  input: Partial<{ name: string; address: string; phone: string; openHour: string; closeHour: string }>
+): Tenant {
+  const t = store.tenants.find((x) => x.id === tenantId);
+  if (!t) throw new Error('TENANT_NOT_FOUND');
+  if (input.name !== undefined) t.name = input.name;
+  if (input.address !== undefined) t.address = input.address;
+  if (input.phone !== undefined) t.phone = input.phone;
+  if (input.openHour !== undefined) t.openHour = input.openHour;
+  if (input.closeHour !== undefined) t.closeHour = input.closeHour;
+  return t;
+}
+
+// ── Weekly Stats ──────────────────────────────────────────────────────────────
+
+export function getWeeklyStats(tenantId: string): {
+  daily: DailyRevenue[];
+  topBarbers: BarberStats[];
+  topServices: ServiceStats[];
+  totalRevenue: number;
+  totalCustomers: number;
+} {
+  const days: DailyRevenue[] = [];
+  const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().slice(0, 10);
+    const label = dayLabels[d.getDay()];
+
+    const dayItems = store.queueItems.filter(
+      (q) =>
+        q.tenantId === tenantId &&
+        q.status === 'DONE' &&
+        q.paymentStatus === 'PAID' &&
+        (q.completedAt?.startsWith(dateStr) ?? q.createdAt.startsWith(dateStr))
+    );
+
+    days.push({
+      date: dateStr,
+      label,
+      revenueIdr: dayItems.reduce((s, q) => s + q.priceIdr, 0),
+      customerCount: new Set(dayItems.map((q) => q.customerId)).size,
+    });
+  }
+
+  // Top barbers
+  const doneItems = store.queueItems.filter(
+    (q) => q.tenantId === tenantId && q.status === 'DONE' && q.paymentStatus === 'PAID'
+  );
+
+  const barberMap = new Map<string, { name: string; count: number; revenue: number }>();
+  for (const item of doneItems) {
+    if (!item.barberId) continue;
+    const barber = store.barbers.find((b) => b.id === item.barberId);
+    if (!barber) continue;
+    const cur = barberMap.get(item.barberId) ?? { name: barber.name, count: 0, revenue: 0 };
+    cur.count += 1;
+    cur.revenue += item.priceIdr;
+    barberMap.set(item.barberId, cur);
+  }
+  const topBarbers: BarberStats[] = [...barberMap.entries()]
+    .map(([id, v]) => ({ barberId: id, barberName: v.name, servedCount: v.count, revenueIdr: v.revenue }))
+    .sort((a, b) => b.servedCount - a.servedCount)
+    .slice(0, 5);
+
+  // Top services
+  const serviceMap = new Map<string, { name: string; count: number; revenue: number }>();
+  for (const item of doneItems) {
+    const svc = store.services.find((s) => s.id === item.serviceId);
+    if (!svc) continue;
+    const cur = serviceMap.get(item.serviceId) ?? { name: svc.name, count: 0, revenue: 0 };
+    cur.count += 1;
+    cur.revenue += item.priceIdr;
+    serviceMap.set(item.serviceId, cur);
+  }
+  const topServices: ServiceStats[] = [...serviceMap.entries()]
+    .map(([id, v]) => ({ serviceId: id, serviceName: v.name, count: v.count, revenueIdr: v.revenue }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
+  return {
+    daily: days,
+    topBarbers,
+    topServices,
+    totalRevenue: days.reduce((s, d) => s + d.revenueIdr, 0),
+    totalCustomers: days.reduce((s, d) => s + d.customerCount, 0),
+  };
 }

@@ -18,7 +18,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { formatRupiah, formatTime } from '@/lib/utils';
+import { LangToggle } from '@/components/lang-toggle';
+import { useLang } from '@/components/lang-provider';
+import { formatRupiah } from '@/lib/utils';
 import type { Tenant, Barber, Service, QueueStats, QueueItemPopulated } from '@/lib/types';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -43,6 +45,7 @@ interface Ticket {
 // ── Status Badge ─────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: string }) {
+  const { t } = useLang();
   const classMap: Record<string, string> = {
     WAITING: 'badge-waiting',
     IN_SERVICE: 'badge-inservice',
@@ -50,10 +53,10 @@ function StatusBadge({ status }: { status: string }) {
     CANCELLED: 'badge-cancelled',
   };
   const label: Record<string, string> = {
-    WAITING: 'MENUNGGU',
-    IN_SERVICE: 'DILAYANI',
-    DONE: 'SELESAI',
-    CANCELLED: 'BATAL',
+    WAITING: t('statusWaiting'),
+    IN_SERVICE: t('statusInService'),
+    DONE: t('statusDone'),
+    CANCELLED: t('statusCancelled'),
   };
   return (
     <span
@@ -67,22 +70,23 @@ function StatusBadge({ status }: { status: string }) {
 // ── Stats Bar ─────────────────────────────────────────────────────────────────
 
 function StatsBar({ stats }: { stats: QueueStats }) {
+  const { t } = useLang();
   return (
     <div className="grid grid-cols-3 gap-3">
       <Card className="flex flex-col items-center justify-center p-4 border-2">
         <Users className="h-5 w-5 mb-1 text-muted-foreground" />
         <div className="text-2xl font-black">{stats.waitingCount}</div>
-        <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Menunggu</div>
+        <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{t('queueWaiting')}</div>
       </Card>
       <Card className="flex flex-col items-center justify-center p-4 border-2">
         <Clock className="h-5 w-5 mb-1 text-muted-foreground" />
         <div className="text-2xl font-black">~{stats.estimatedWaitMin}</div>
-        <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Menit</div>
+        <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{t('minutes')}</div>
       </Card>
       <Card className="flex flex-col items-center justify-center p-4 border-2">
         <Zap className="h-5 w-5 mb-1 text-muted-foreground" />
         <div className="text-2xl font-black">{stats.activeBarbers}</div>
-        <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Barber</div>
+        <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{t('barber')}</div>
       </Card>
     </div>
   );
@@ -100,6 +104,7 @@ interface JoinModalProps {
 }
 
 function JoinModal({ open, onClose, barbers, services, tenantSlug, onSuccess }: JoinModalProps) {
+  const { t } = useLang();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [serviceId, setServiceId] = useState('');
@@ -111,7 +116,7 @@ function JoinModal({ open, onClose, barbers, services, tenantSlug, onSuccess }: 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim() || !phone.trim() || !serviceId) {
-      toast.error('Lengkapi semua data terlebih dahulu');
+      toast.error(t('joinValidation'));
       return;
     }
     setLoading(true);
@@ -127,7 +132,7 @@ function JoinModal({ open, onClose, barbers, services, tenantSlug, onSuccess }: 
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.error?.message ?? 'Gagal mengambil antrian');
+        toast.error(data.error?.message ?? t('joinError'));
         return;
       }
       onSuccess({ queueNumber: data.ticket.queueNumber, item: data.ticket.item, stats: data.stats });
@@ -136,7 +141,7 @@ function JoinModal({ open, onClose, barbers, services, tenantSlug, onSuccess }: 
       setServiceId('');
       setBarberId('any');
     } catch {
-      toast.error('Terjadi kesalahan. Coba lagi.');
+      toast.error(t('error'));
     } finally {
       setLoading(false);
     }
@@ -147,15 +152,15 @@ function JoinModal({ open, onClose, barbers, services, tenantSlug, onSuccess }: 
       <DialogContent className="max-w-md border-2">
         <DialogHeader>
           <DialogTitle className="text-xl font-black uppercase tracking-tight">
-            Ambil Antrian
+            {t('joinTitle')}
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
           <div className="space-y-1.5">
-            <Label htmlFor="name" className="font-bold uppercase text-xs tracking-wider">Nama</Label>
+            <Label htmlFor="name" className="font-bold uppercase text-xs tracking-wider">{t('joinName')}</Label>
             <Input
               id="name"
-              placeholder="Nama lengkap kamu"
+              placeholder={t('joinNamePlaceholder')}
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="border-2 font-medium"
@@ -163,11 +168,11 @@ function JoinModal({ open, onClose, barbers, services, tenantSlug, onSuccess }: 
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="phone" className="font-bold uppercase text-xs tracking-wider">No. HP</Label>
+            <Label htmlFor="phone" className="font-bold uppercase text-xs tracking-wider">{t('joinPhone')}</Label>
             <Input
               id="phone"
               type="tel"
-              placeholder="08xxxxxxxxxx"
+              placeholder={t('joinPhonePlaceholder')}
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               className="border-2 font-medium"
@@ -175,17 +180,17 @@ function JoinModal({ open, onClose, barbers, services, tenantSlug, onSuccess }: 
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="font-bold uppercase text-xs tracking-wider">Layanan</Label>
+            <Label className="font-bold uppercase text-xs tracking-wider">{t('joinService')}</Label>
             <Select value={serviceId} onValueChange={setServiceId} required>
               <SelectTrigger className="border-2 font-medium">
-                <SelectValue placeholder="Pilih layanan" />
+                <SelectValue placeholder={t('joinServicePlaceholder')} />
               </SelectTrigger>
               <SelectContent>
                 {services.map((svc) => (
                   <SelectItem key={svc.id} value={svc.id}>
                     <span className="font-medium">{svc.name}</span>
                     <span className="ml-2 text-muted-foreground text-sm">
-                      {formatRupiah(svc.priceIdr)} · {svc.durationMin} mnt
+                      {formatRupiah(svc.priceIdr)} · {svc.durationMin} {t('minutes')}
                     </span>
                   </SelectItem>
                 ))}
@@ -193,14 +198,14 @@ function JoinModal({ open, onClose, barbers, services, tenantSlug, onSuccess }: 
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="font-bold uppercase text-xs tracking-wider">Barber</Label>
+            <Label className="font-bold uppercase text-xs tracking-wider">{t('joinBarber')}</Label>
             <Select value={barberId} onValueChange={setBarberId}>
               <SelectTrigger className="border-2 font-medium">
-                <SelectValue placeholder="Pilih barber" />
+                <SelectValue placeholder={t('joinBarberAny')} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="any">
-                  <span className="font-medium">Barber mana saja</span>
+                  <span className="font-medium">{t('joinBarberAny')}</span>
                 </SelectItem>
                 {activeBarbers.map((b) => (
                   <SelectItem key={b.id} value={b.id}>
@@ -218,7 +223,7 @@ function JoinModal({ open, onClose, barbers, services, tenantSlug, onSuccess }: 
               onClick={onClose}
               disabled={loading}
             >
-              Batal
+              {t('cancel')}
             </Button>
             <Button
               type="submit"
@@ -228,7 +233,7 @@ function JoinModal({ open, onClose, barbers, services, tenantSlug, onSuccess }: 
               {loading ? (
                 <RefreshCw className="h-4 w-4 animate-spin" />
               ) : (
-                <>Ambil Antrian <ChevronRight className="h-4 w-4 ml-1" /></>
+                <>{t('joinSubmit')} <ChevronRight className="h-4 w-4 ml-1" /></>
               )}
             </Button>
           </div>
@@ -240,13 +245,8 @@ function JoinModal({ open, onClose, barbers, services, tenantSlug, onSuccess }: 
 
 // ── Ticket View ───────────────────────────────────────────────────────────────
 
-function TicketView({
-  ticket,
-  onReset,
-}: {
-  ticket: Ticket;
-  onReset: () => void;
-}) {
+function TicketView({ ticket, onReset }: { ticket: Ticket; onReset: () => void }) {
+  const { t } = useLang();
   const { queueNumber, item, stats } = ticket;
 
   return (
@@ -255,16 +255,16 @@ function TicketView({
       <div className="flex flex-col items-center gap-2">
         <CheckCircle className="h-12 w-12 text-primary" strokeWidth={2.5} />
         <p className="text-sm font-bold uppercase tracking-widest text-muted-foreground">
-          Antrian Berhasil Diambil
+          {t('queueTicketSuccess')}
         </p>
       </div>
 
       {/* Big queue number */}
       <Card className="w-full border-4 flex flex-col items-center justify-center py-10 relative overflow-hidden">
         <div className="text-xs font-black uppercase tracking-[0.3em] text-muted-foreground mb-2">
-          Nomor Antrian Kamu
+          {t('queueTicketNumber')}
         </div>
-        <div className="queue-number font-black leading-none" aria-label={`Nomor antrian ${queueNumber}`}>
+        <div className="queue-number font-black leading-none" aria-label={`${t('queueTicketNumber')} ${queueNumber}`}>
           {String(queueNumber).padStart(3, '0')}
         </div>
         <div className="mt-4 flex items-center gap-2">
@@ -275,24 +275,24 @@ function TicketView({
       {/* Details */}
       <Card className="w-full border-2 divide-y divide-border">
         <div className="p-4 flex items-center justify-between">
-          <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Nama</span>
+          <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{t('name')}</span>
           <span className="font-bold">{item.customer.name}</span>
         </div>
         <div className="p-4 flex items-center justify-between">
-          <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Layanan</span>
+          <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{t('service')}</span>
           <span className="font-bold">{item.service.name}</span>
         </div>
         <div className="p-4 flex items-center justify-between">
-          <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Barber</span>
-          <span className="font-bold">{item.barber?.name ?? 'Barber mana saja'}</span>
+          <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{t('barber')}</span>
+          <span className="font-bold">{item.barber?.name ?? t('joinBarberAny')}</span>
         </div>
         <div className="p-4 flex items-center justify-between">
-          <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Harga</span>
+          <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{t('price')}</span>
           <span className="font-bold">{formatRupiah(item.priceIdr)}</span>
         </div>
         <div className="p-4 flex items-center justify-between">
-          <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Estimasi Tunggu</span>
-          <span className="font-bold">~{stats.estimatedWaitMin} menit</span>
+          <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{t('queueEstimatedWait')}</span>
+          <span className="font-bold">~{stats.estimatedWaitMin} {t('minutes')}</span>
         </div>
       </Card>
 
@@ -300,16 +300,16 @@ function TicketView({
       <div className="w-full grid grid-cols-2 gap-3 text-center">
         <Card className="border-2 p-3">
           <div className="text-xl font-black">{stats.waitingCount}</div>
-          <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Di depan kamu</div>
+          <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('queueInFront')}</div>
         </Card>
         <Card className="border-2 p-3">
           <div className="text-xl font-black">{stats.activeBarbers}</div>
-          <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Barber aktif</div>
+          <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('queueActiveBarbers')}</div>
         </Card>
       </div>
 
       <p className="text-sm text-muted-foreground text-center">
-        Harap tetap di area barbershop. Nomor antrian kamu akan dipanggil segera.
+        {t('queueStayInfo')}
       </p>
 
       <Button
@@ -318,7 +318,7 @@ function TicketView({
         onClick={onReset}
       >
         <X className="h-4 w-4 mr-2" />
-        Ambil Antrian Lain
+        {t('queueAnotherTicket')}
       </Button>
     </div>
   );
@@ -328,6 +328,7 @@ function TicketView({
 
 export default function QueuePage({ params }: { params: Promise<{ tenant: string }> }) {
   const { tenant: slug } = use(params);
+  const { t, lang } = useLang();
 
   const [tenantData, setTenantData] = useState<TenantData | null>(null);
   const [queueData, setQueueData] = useState<QueueData | null>(null);
@@ -335,6 +336,8 @@ export default function QueuePage({ params }: { params: Promise<{ tenant: string
   const [joinOpen, setJoinOpen] = useState(false);
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+
+  const timeLocale = lang === 'en' ? 'en-US' : 'id-ID';
 
   // Load tenant info once
   useEffect(() => {
@@ -344,12 +347,13 @@ export default function QueuePage({ params }: { params: Promise<{ tenant: string
         if (!res.ok) throw new Error('Not found');
         setTenantData(await res.json());
       } catch {
-        toast.error('Barbershop tidak ditemukan');
+        toast.error(t('queueNotFound'));
       } finally {
         setLoadingTenant(false);
       }
     }
     loadTenant();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
   // Poll queue stats every 10 seconds
@@ -371,11 +375,11 @@ export default function QueuePage({ params }: { params: Promise<{ tenant: string
     return () => clearInterval(interval);
   }, [refreshQueue]);
 
-  function handleJoinSuccess(t: Ticket) {
-    setTicket(t);
+  function handleJoinSuccess(tk: Ticket) {
+    setTicket(tk);
     setJoinOpen(false);
     refreshQueue();
-    toast.success(`Antrian #${String(t.queueNumber).padStart(3, '0')} berhasil diambil!`);
+    toast.success(`#${String(tk.queueNumber).padStart(3, '0')} ${t('joinSuccess')}`);
   }
 
   if (loadingTenant) {
@@ -391,7 +395,7 @@ export default function QueuePage({ params }: { params: Promise<{ tenant: string
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <p className="text-2xl font-black">404</p>
-          <p className="text-muted-foreground mt-2">Barbershop tidak ditemukan</p>
+          <p className="text-muted-foreground mt-2">{t('queueNotFound')}</p>
         </div>
       </div>
     );
@@ -412,10 +416,11 @@ export default function QueuePage({ params }: { params: Promise<{ tenant: string
             <button
               onClick={refreshQueue}
               className="p-1.5 rounded text-muted-foreground hover:text-foreground transition-colors"
-              title="Refresh"
+              title={t('refresh')}
             >
               <RefreshCw className="h-4 w-4" />
             </button>
+            <LangToggle />
             <ThemeToggle />
           </div>
         </div>
@@ -445,10 +450,10 @@ export default function QueuePage({ params }: { params: Promise<{ tenant: string
               <div className="mb-6">
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-sm font-black uppercase tracking-widest text-muted-foreground">
-                    Status Sekarang
+                    {t('queueLiveStatus')}
                   </h2>
                   <span className="text-xs text-muted-foreground">
-                    {lastRefresh.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                    {lastRefresh.toLocaleTimeString(timeLocale, { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
                 <StatsBar stats={queueData.stats} />
@@ -463,7 +468,7 @@ export default function QueuePage({ params }: { params: Promise<{ tenant: string
                 onClick={() => setJoinOpen(true)}
               >
                 <Scissors className="h-5 w-5 mr-2" strokeWidth={2.5} />
-                Ambil Antrian Sekarang
+                {t('queueJoinCTA')}
               </Button>
               <Button
                 variant="outline"
@@ -473,7 +478,7 @@ export default function QueuePage({ params }: { params: Promise<{ tenant: string
               >
                 <Link href={`/${slug}/booking`}>
                   <Clock className="h-4 w-4 mr-2" />
-                  Booking Jadwal
+                  {t('queueBookCTA')}
                 </Link>
               </Button>
             </div>
@@ -482,7 +487,7 @@ export default function QueuePage({ params }: { params: Promise<{ tenant: string
             {queueData && queueData.items.filter(i => i.status === 'WAITING' || i.status === 'IN_SERVICE').length > 0 && (
               <div>
                 <h2 className="text-sm font-black uppercase tracking-widest text-muted-foreground mb-3">
-                  Antrian Aktif
+                  {t('queueActiveList')}
                 </h2>
                 <div className="space-y-2">
                   {queueData.items
@@ -511,7 +516,7 @@ export default function QueuePage({ params }: { params: Promise<{ tenant: string
             {/* Services */}
             <div className="mt-8">
               <h2 className="text-sm font-black uppercase tracking-widest text-muted-foreground mb-3">
-                Layanan Kami
+                {t('queueServices')}
               </h2>
               <div className="grid grid-cols-2 gap-2">
                 {tenantData.services.map((svc) => (
@@ -519,7 +524,7 @@ export default function QueuePage({ params }: { params: Promise<{ tenant: string
                     <div className="font-bold text-sm">{svc.name}</div>
                     <div className="flex items-center justify-between mt-1">
                       <span className="text-primary font-black text-sm">{formatRupiah(svc.priceIdr)}</span>
-                      <span className="text-xs text-muted-foreground">{svc.durationMin} mnt</span>
+                      <span className="text-xs text-muted-foreground">{svc.durationMin} {t('minutes')}</span>
                     </div>
                   </Card>
                 ))}
@@ -529,7 +534,7 @@ export default function QueuePage({ params }: { params: Promise<{ tenant: string
             {/* Barbers */}
             <div className="mt-6 mb-4">
               <h2 className="text-sm font-black uppercase tracking-widest text-muted-foreground mb-3">
-                Barber Kami
+                {t('queueBarbers')}
               </h2>
               <div className="flex flex-wrap gap-2">
                 {tenantData.barbers.map((b) => (
