@@ -1,4 +1,3 @@
-import { nanoid } from 'nanoid';
 import type {
   Tenant,
   Barber,
@@ -13,15 +12,10 @@ import type {
   BarberStats,
 } from './types';
 
-// ── In-memory store ──────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-interface Store {
-  tenants: Tenant[];
-  barbers: Barber[];
-  services: Service[];
-  customers: Customer[];
-  queueItems: QueueItem[];
-  bookings: Booking[];
+function uid(): string {
+  return Math.random().toString(36).slice(2, 10);
 }
 
 function todayISO(): string {
@@ -47,7 +41,18 @@ function tomorrowAt(hhmm: string): string {
   return d.toISOString();
 }
 
-// ── Seed data ────────────────────────────────────────────────────────────────
+// ── In-memory store ───────────────────────────────────────────────────────────
+
+interface Store {
+  tenants: Tenant[];
+  barbers: Barber[];
+  services: Service[];
+  customers: Customer[];
+  queueItems: QueueItem[];
+  bookings: Booking[];
+}
+
+// ── Seed data ─────────────────────────────────────────────────────────────────
 
 const TENANT_ID = 'tenant_cugo';
 
@@ -117,157 +122,152 @@ const SEED_CUSTOMERS: Customer[] = [
   },
 ];
 
-const SEED_QUEUE: QueueItem[] = [
-  {
-    id: 'q_1',
-    tenantId: TENANT_ID,
-    customerId: 'cust_1',
-    barberId: 'barber_1',
-    serviceId: 'svc_1',
-    status: 'DONE',
-    queueNumber: 1,
-    createdAt: hoursAgo(4),
-    startedAt: hoursAgo(3.5),
-    completedAt: hoursAgo(3),
-    paymentStatus: 'PAID',
-    priceIdr: 35000,
-  },
-  {
-    id: 'q_2',
-    tenantId: TENANT_ID,
-    customerId: 'cust_2',
-    barberId: 'barber_2',
-    serviceId: 'svc_2',
-    status: 'DONE',
-    queueNumber: 2,
-    createdAt: hoursAgo(3),
-    startedAt: hoursAgo(2.5),
-    completedAt: hoursAgo(2),
-    paymentStatus: 'PAID',
-    priceIdr: 55000,
-  },
-  {
-    id: 'q_3',
-    tenantId: TENANT_ID,
-    customerId: 'cust_3',
-    barberId: 'barber_1',
-    serviceId: 'svc_3',
-    status: 'IN_SERVICE',
-    queueNumber: 3,
-    createdAt: hoursAgo(1.5),
-    startedAt: hoursAgo(0.5),
-    completedAt: null,
-    paymentStatus: 'UNPAID',
-    priceIdr: 65000,
-  },
-  {
-    id: 'q_4',
-    tenantId: TENANT_ID,
-    customerId: 'cust_4',
-    barberId: null,
-    serviceId: 'svc_1',
-    status: 'WAITING',
-    queueNumber: 4,
-    createdAt: hoursAgo(0.5),
-    startedAt: null,
-    completedAt: null,
-    paymentStatus: 'UNPAID',
-    priceIdr: 35000,
-  },
-  {
-    id: 'q_5',
-    tenantId: TENANT_ID,
-    customerId: 'cust_5',
-    barberId: 'barber_2',
-    serviceId: 'svc_4',
-    status: 'WAITING',
-    queueNumber: 5,
-    createdAt: hoursAgo(0.3),
-    startedAt: null,
-    completedAt: null,
-    paymentStatus: 'UNPAID',
-    priceIdr: 25000,
-  },
-];
-
-const SEED_BOOKINGS: Booking[] = [
-  {
-    id: 'book_1',
-    tenantId: TENANT_ID,
-    customerId: 'cust_1',
-    barberId: 'barber_1',
-    serviceId: 'svc_2',
-    startAt: todayAt('14:00'),
-    endAt: todayAt('14:35'),
-    status: 'UPCOMING',
-    priceIdr: 55000,
-  },
-  {
-    id: 'book_2',
-    tenantId: TENANT_ID,
-    customerId: 'cust_3',
-    barberId: 'barber_2',
-    serviceId: 'svc_3',
-    startAt: todayAt('15:00'),
-    endAt: todayAt('15:40'),
-    status: 'UPCOMING',
-    priceIdr: 65000,
-  },
-  {
-    id: 'book_3',
-    tenantId: TENANT_ID,
-    customerId: 'cust_2',
-    barberId: null,
-    serviceId: 'svc_1',
-    startAt: tomorrowAt('10:00'),
-    endAt: tomorrowAt('10:20'),
-    status: 'UPCOMING',
-    priceIdr: 35000,
-  },
-  {
-    id: 'book_4',
-    tenantId: TENANT_ID,
-    customerId: 'cust_5',
-    barberId: 'barber_1',
-    serviceId: 'svc_1',
-    startAt: todayAt('16:00'),
-    endAt: todayAt('16:20'),
-    status: 'UPCOMING',
-    priceIdr: 35000,
-  },
-];
-
-// ── Store singleton ──────────────────────────────────────────────────────────
-
-declare global {
-  // eslint-disable-next-line no-var
-  var __barbershopStore: Store | undefined;
+function makeSeedQueue(): QueueItem[] {
+  return [
+    {
+      id: 'q_1',
+      tenantId: TENANT_ID,
+      customerId: 'cust_1',
+      barberId: 'barber_1',
+      serviceId: 'svc_1',
+      status: 'DONE',
+      queueNumber: 1,
+      createdAt: hoursAgo(4),
+      startedAt: hoursAgo(3.5),
+      completedAt: hoursAgo(3),
+      paymentStatus: 'PAID',
+      priceIdr: 35000,
+    },
+    {
+      id: 'q_2',
+      tenantId: TENANT_ID,
+      customerId: 'cust_2',
+      barberId: 'barber_2',
+      serviceId: 'svc_2',
+      status: 'DONE',
+      queueNumber: 2,
+      createdAt: hoursAgo(3),
+      startedAt: hoursAgo(2.5),
+      completedAt: hoursAgo(2),
+      paymentStatus: 'PAID',
+      priceIdr: 55000,
+    },
+    {
+      id: 'q_3',
+      tenantId: TENANT_ID,
+      customerId: 'cust_3',
+      barberId: 'barber_1',
+      serviceId: 'svc_3',
+      status: 'IN_SERVICE',
+      queueNumber: 3,
+      createdAt: hoursAgo(1.5),
+      startedAt: hoursAgo(0.5),
+      completedAt: null,
+      paymentStatus: 'UNPAID',
+      priceIdr: 65000,
+    },
+    {
+      id: 'q_4',
+      tenantId: TENANT_ID,
+      customerId: 'cust_4',
+      barberId: null,
+      serviceId: 'svc_1',
+      status: 'WAITING',
+      queueNumber: 4,
+      createdAt: hoursAgo(0.5),
+      startedAt: null,
+      completedAt: null,
+      paymentStatus: 'UNPAID',
+      priceIdr: 35000,
+    },
+    {
+      id: 'q_5',
+      tenantId: TENANT_ID,
+      customerId: 'cust_5',
+      barberId: 'barber_2',
+      serviceId: 'svc_4',
+      status: 'WAITING',
+      queueNumber: 5,
+      createdAt: hoursAgo(0.3),
+      startedAt: null,
+      completedAt: null,
+      paymentStatus: 'UNPAID',
+      priceIdr: 25000,
+    },
+  ];
 }
 
-function getStore(): Store {
-  if (!global.__barbershopStore) {
-    global.__barbershopStore = {
-      tenants: [...SEED_TENANTS],
-      barbers: [...SEED_BARBERS],
-      services: [...SEED_SERVICES],
-      customers: [...SEED_CUSTOMERS],
-      queueItems: [...SEED_QUEUE],
-      bookings: [...SEED_BOOKINGS],
-    };
-  }
-  return global.__barbershopStore;
+function makeSeedBookings(): Booking[] {
+  return [
+    {
+      id: 'book_1',
+      tenantId: TENANT_ID,
+      customerId: 'cust_1',
+      barberId: 'barber_1',
+      serviceId: 'svc_2',
+      startAt: todayAt('14:00'),
+      endAt: todayAt('14:35'),
+      status: 'UPCOMING',
+      priceIdr: 55000,
+    },
+    {
+      id: 'book_2',
+      tenantId: TENANT_ID,
+      customerId: 'cust_3',
+      barberId: 'barber_2',
+      serviceId: 'svc_3',
+      startAt: todayAt('15:00'),
+      endAt: todayAt('15:40'),
+      status: 'UPCOMING',
+      priceIdr: 65000,
+    },
+    {
+      id: 'book_3',
+      tenantId: TENANT_ID,
+      customerId: 'cust_2',
+      barberId: null,
+      serviceId: 'svc_1',
+      startAt: tomorrowAt('10:00'),
+      endAt: tomorrowAt('10:20'),
+      status: 'UPCOMING',
+      priceIdr: 35000,
+    },
+    {
+      id: 'book_4',
+      tenantId: TENANT_ID,
+      customerId: 'cust_5',
+      barberId: 'barber_1',
+      serviceId: 'svc_1',
+      startAt: todayAt('16:00'),
+      endAt: todayAt('16:20'),
+      status: 'UPCOMING',
+      priceIdr: 35000,
+    },
+  ];
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Module-level store (Vercel-safe, no globals/ESM deps) ─────────────────────
+// Each cold start re-seeds. State persists within the same serverless instance.
 
-function populateQueueItem(item: QueueItem, store: Store): QueueItemPopulated {
+const store: Store = {
+  tenants: [...SEED_TENANTS],
+  barbers: [...SEED_BARBERS],
+  services: [...SEED_SERVICES],
+  customers: [...SEED_CUSTOMERS],
+  queueItems: makeSeedQueue(),
+  bookings: makeSeedBookings(),
+};
+
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
+function populateQueueItem(item: QueueItem): QueueItemPopulated {
   const customer = store.customers.find((c) => c.id === item.customerId)!;
   const barber = item.barberId ? store.barbers.find((b) => b.id === item.barberId) ?? null : null;
   const service = store.services.find((s) => s.id === item.serviceId)!;
   return { ...item, customer, barber, service };
 }
 
-function populateBooking(booking: Booking, store: Store): BookingPopulated {
+function populateBooking(booking: Booking): BookingPopulated {
   const customer = store.customers.find((c) => c.id === booking.customerId)!;
   const barber = booking.barberId
     ? store.barbers.find((b) => b.id === booking.barberId) ?? null
@@ -276,7 +276,7 @@ function populateBooking(booking: Booking, store: Store): BookingPopulated {
   return { ...booking, customer, barber, service };
 }
 
-function computeStats(tenantId: string, store: Store): QueueStats {
+function computeStats(tenantId: string): QueueStats {
   const today = todayISO();
   const todayItems = store.queueItems.filter(
     (q) => q.tenantId === tenantId && q.createdAt.startsWith(today)
@@ -287,12 +287,11 @@ function computeStats(tenantId: string, store: Store): QueueStats {
     (b) => b.tenantId === tenantId && b.isActive
   ).length;
 
-  // Estimate: each waiting person waits for the avg service duration of in-queue services
+  const tenantServices = store.services.filter((s) => s.tenantId === tenantId);
   const avgDuration =
-    store.services
-      .filter((s) => s.tenantId === tenantId)
-      .reduce((sum, s) => sum + s.durationMin, 0) /
-      (store.services.filter((s) => s.tenantId === tenantId).length || 1);
+    tenantServices.length > 0
+      ? tenantServices.reduce((sum, s) => sum + s.durationMin, 0) / tenantServices.length
+      : 20;
 
   const estimatedWaitMin =
     activeBarbers > 0
@@ -307,10 +306,9 @@ function computeStats(tenantId: string, store: Store): QueueStats {
   };
 }
 
-// ── Public API ───────────────────────────────────────────────────────────────
+// ── Public API ────────────────────────────────────────────────────────────────
 
 export function getTenantBySlug(slug: string) {
-  const store = getStore();
   const tenant = store.tenants.find((t) => t.slug === slug);
   if (!tenant) return null;
   const barbers = store.barbers.filter((b) => b.tenantId === tenant.id);
@@ -319,13 +317,12 @@ export function getTenantBySlug(slug: string) {
 }
 
 export function listQueue(tenantId: string): { stats: QueueStats; items: QueueItemPopulated[] } {
-  const store = getStore();
   const today = todayISO();
   const items = store.queueItems
     .filter((q) => q.tenantId === tenantId && q.createdAt.startsWith(today))
     .sort((a, b) => a.queueNumber - b.queueNumber)
-    .map((item) => populateQueueItem(item, store));
-  const stats = computeStats(tenantId, store);
+    .map((item) => populateQueueItem(item));
+  const stats = computeStats(tenantId);
   return { stats, items };
 }
 
@@ -333,7 +330,6 @@ export function joinQueue(
   tenantId: string,
   input: { customer: { name: string; phone: string }; serviceId: string; barberId?: string | null }
 ): { ticket: { queueNumber: number; item: QueueItemPopulated }; stats: QueueStats } {
-  const store = getStore();
   const today = todayISO();
 
   // Find or create customer
@@ -342,7 +338,7 @@ export function joinQueue(
   );
   if (!customer) {
     customer = {
-      id: `cust_${nanoid(8)}`,
+      id: `cust_${uid()}`,
       tenantId,
       name: input.customer.name,
       phone: input.customer.phone,
@@ -352,18 +348,16 @@ export function joinQueue(
     store.customers.push(customer);
   }
 
-  // Resolve service & price
   const service = store.services.find((s) => s.id === input.serviceId && s.tenantId === tenantId);
   if (!service) throw new Error('SERVICE_NOT_FOUND');
 
-  // Determine queue number (count of items created today + 1)
   const todayItems = store.queueItems.filter(
     (q) => q.tenantId === tenantId && q.createdAt.startsWith(today)
   );
   const queueNumber = todayItems.length + 1;
 
   const newItem: QueueItem = {
-    id: `q_${nanoid(8)}`,
+    id: `q_${uid()}`,
     tenantId,
     customerId: customer.id,
     barberId: input.barberId ?? null,
@@ -378,16 +372,14 @@ export function joinQueue(
   };
   store.queueItems.push(newItem);
 
-  const stats = computeStats(tenantId, store);
-  const populated = populateQueueItem(newItem, store);
-  return { ticket: { queueNumber, item: populated }, stats };
+  const stats = computeStats(tenantId);
+  return { ticket: { queueNumber, item: populateQueueItem(newItem) }, stats };
 }
 
 export function startQueue(
   tenantId: string,
   queueItemId: string
 ): { item: QueueItemPopulated; stats: QueueStats } {
-  const store = getStore();
   const item = store.queueItems.find((q) => q.id === queueItemId && q.tenantId === tenantId);
   if (!item) throw new Error('QUEUE_ITEM_NOT_FOUND');
   if (item.status !== 'WAITING') throw new Error('INVALID_STATUS_TRANSITION');
@@ -395,8 +387,7 @@ export function startQueue(
   item.status = 'IN_SERVICE';
   item.startedAt = new Date().toISOString();
 
-  const stats = computeStats(tenantId, store);
-  return { item: populateQueueItem(item, store), stats };
+  return { item: populateQueueItem(item), stats: computeStats(tenantId) };
 }
 
 export function completeQueue(
@@ -404,7 +395,6 @@ export function completeQueue(
   queueItemId: string,
   paymentStatus: 'PAID'
 ): { item: QueueItemPopulated; stats: QueueStats; customer: Customer } {
-  const store = getStore();
   const item = store.queueItems.find((q) => q.id === queueItemId && q.tenantId === tenantId);
   if (!item) throw new Error('QUEUE_ITEM_NOT_FOUND');
   if (item.status !== 'IN_SERVICE') throw new Error('INVALID_STATUS_TRANSITION');
@@ -417,15 +407,13 @@ export function completeQueue(
   customer.lastVisitAt = new Date().toISOString();
   customer.visitCount += 1;
 
-  const stats = computeStats(tenantId, store);
-  return { item: populateQueueItem(item, store), stats, customer };
+  return { item: populateQueueItem(item), stats: computeStats(tenantId), customer };
 }
 
 export function cancelQueue(
   tenantId: string,
   queueItemId: string
 ): { item: QueueItemPopulated; stats: QueueStats } {
-  const store = getStore();
   const item = store.queueItems.find((q) => q.id === queueItemId && q.tenantId === tenantId);
   if (!item) throw new Error('QUEUE_ITEM_NOT_FOUND');
   if (item.status === 'DONE' || item.status === 'CANCELLED')
@@ -433,36 +421,30 @@ export function cancelQueue(
 
   item.status = 'CANCELLED';
 
-  const stats = computeStats(tenantId, store);
-  return { item: populateQueueItem(item, store), stats };
+  return { item: populateQueueItem(item), stats: computeStats(tenantId) };
 }
 
 export function listBookings(tenantId: string, date?: string): BookingPopulated[] {
-  const store = getStore();
   const targetDate = date ?? todayISO();
   return store.bookings
     .filter((b) => b.tenantId === tenantId && b.startAt.startsWith(targetDate))
     .sort((a, b) => a.startAt.localeCompare(b.startAt))
-    .map((b) => populateBooking(b, store));
+    .map((b) => populateBooking(b));
 }
 
 export function getDashboardToday(
   tenantId: string
 ): { summary: DashboardSummary; barberStats: BarberStats[] } {
-  const store = getStore();
   const today = todayISO();
-
   const todayItems = store.queueItems.filter(
     (q) => q.tenantId === tenantId && q.createdAt.startsWith(today)
   );
 
   const doneItems = todayItems.filter((q) => q.status === 'DONE' && q.paymentStatus === 'PAID');
   const revenueTodayIdr = doneItems.reduce((sum, q) => sum + q.priceIdr, 0);
-
   const customersToday = new Set(
     todayItems.filter((q) => q.status !== 'CANCELLED').map((q) => q.customerId)
   ).size;
-
   const activeQueueCount = todayItems.filter(
     (q) => q.status === 'WAITING' || q.status === 'IN_SERVICE'
   ).length;
@@ -478,21 +460,16 @@ export function getDashboardToday(
     };
   });
 
-  return {
-    summary: { customersToday, revenueTodayIdr, activeQueueCount },
-    barberStats,
-  };
+  return { summary: { customersToday, revenueTodayIdr, activeQueueCount }, barberStats };
 }
 
 export function listCustomers(tenantId: string): Customer[] {
-  const store = getStore();
   return store.customers
     .filter((c) => c.tenantId === tenantId)
     .sort((a, b) => (b.visitCount ?? 0) - (a.visitCount ?? 0));
 }
 
 export function toggleBarberActive(tenantId: string, barberId: string): Barber {
-  const store = getStore();
   const barber = store.barbers.find((b) => b.id === barberId && b.tenantId === tenantId);
   if (!barber) throw new Error('BARBER_NOT_FOUND');
   barber.isActive = !barber.isActive;
