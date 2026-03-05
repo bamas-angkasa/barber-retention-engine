@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+/frontend/node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -15,7 +16,12 @@
 
 # next.js
 /.next/
+/frontend/.next/
 /out/
+
+# Go build artifacts
+/backend/server
+/backend/*.exe
 
 # production
 /build

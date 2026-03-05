@@ -5,7 +5,22 @@
       "Bash(npm install:*)",
       "Bash(npx shadcn@latest:*)",
       "Bash(npx tsc:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(python3:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(grep:*)",
+      "Bash(go version:*)",
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "Bash(lsof +D:*)",
+      "Bash(tasklist:*)",
+      "Bash(cp:*)",
+      "Bash(rm:*)",
+      "Bash(go get:*)",
+      "Bash(go build:*)",
+      "Bash(go mod:*)",
+      "Bash(GOFLAGS=\"-mod=mod\" GOTOOLCHAIN=auto go build:*)",
+      "Bash(GOTOOLCHAIN=auto go build:*)"
     ]
   }
 }
